@@ -20,8 +20,8 @@ const cookieParser = require('cookie-parser');
 
 app.use(express.json());
 app.use(cors({
-  origin: 'http://localhost:5173', 
-  credentials: true               // Allow credentials (cookies, headers)
+  origin: ['http://localhost:5173', 'http://www.educonnect.pro.et', 'https://www.educonnect.pro.et'],
+  credentials: true
 }));
 app.use(cookieParser()); // parse cookies
 
@@ -143,7 +143,8 @@ app.post('/register', async (req, res) => {
 // LOGIN
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
-console.log('Login attempt:', { email });
+  console.log('Login attempt:', { email });
+  
   try {
     const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
 
@@ -158,11 +159,11 @@ console.log('Login attempt:', { email });
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-const token = jwt.sign(
-  { user_id: String(user.user_id), role: user.role },
-  JWT_SECRET,
-  { expiresIn: '1d' }
-)
+    const token = jwt.sign(
+      { user_id: String(user.user_id), role: user.role },
+      JWT_SECRET,
+      { expiresIn: '1d' }
+    );
 
     console.log('User logged in:', { user_id: user.user_id, role: user.role });
 
@@ -170,10 +171,29 @@ const token = jwt.sign(
     await pool.query('UPDATE users SET last_login = NOW() WHERE user_id = ?', [user.user_id]);
 
     // Set cookies
-    res.cookie('auth_token', token, { httpOnly: true, secure: false });
-    res.cookie('role', user.role, { httpOnly: true, secure: false });
+    res.cookie('auth_token', token, { 
+      httpOnly: true, 
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax'
+    });
+    res.cookie('role', user.role, { 
+      httpOnly: true, 
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax'
+    });
 
-    res.json({ message: 'Login successful' });
+    // Return user data in response
+    res.json({ 
+      message: 'Login successful',
+      user: {
+        user_id: user.user_id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        email: user.email,
+        role: user.role,
+        avatar_url: user.avatar_url
+      }
+    });
 
   } catch (err) {
     console.error('Login error:', err);
@@ -253,19 +273,25 @@ app.delete('/profile/delete', async (req, res) => {
 
 
 // AUTH MIDDLEWARE
-function authenticate(req, res, next) {
-  const token = req.cookies.auth_token;
-  if (!token) return res.status(401).json({ message: 'No token provided' });
-
+// middleware/auth.js
+const authenticate = (req, res, next) => {
   try {
+    const token = req.cookies.auth_token;
+    
+    if (!token) {
+      console.log('No auth token found in cookies');
+      return res.status(401).json({ success: false, message: 'Not authenticated' });
+    }
+
     const decoded = jwt.verify(token, JWT_SECRET);
-    console.log('Decoded token user_id type:', typeof decoded.user_id, decoded.user_id);
     req.user = decoded;
+    console.log('Authenticated user:', decoded);
     next();
-  } catch {
-    res.status(403).json({ message: 'Invalid token' });
+  } catch (err) {
+    console.error('Authentication error:', err);
+    return res.status(401).json({ success: false, message: 'Invalid token' });
   }
-}
+};
 
 
 // ROLE CHECK MIDDLEWARE
