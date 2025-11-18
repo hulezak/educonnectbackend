@@ -18,20 +18,11 @@ const app = express();
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 app.use(express.json());
-app.use(cors({
-  origin: [
-    'http://localhost:5173', 
-    'http://www.educonnect.pro.et', 
-    'https://www.educonnect.pro.et',
-    'https://educonnect.pro.et'  // ADD THIS - your actual domain
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // ADD METHODS
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'] // ADD HEADERS
-}));
 
-// ADD THIS - Handle preflight requests
-app.options('*', cors());
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://www.educonnect.pro.et', 'https://www.educonnect.pro.et', 'https://educonnect.pro.et'],
+  credentials: true
+}));
 
 app.use(cookieParser());
 
